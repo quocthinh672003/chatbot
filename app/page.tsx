@@ -29,7 +29,7 @@ export default function Home() {
                 Start a conversation
               </h2>
               <p className="text-gray-500 dark:text-gray-400">
-                Ask me anything and I'll help you out!
+                Ask me anything and I&apos;ll help you out!
               </p>
             </div>
           )}
