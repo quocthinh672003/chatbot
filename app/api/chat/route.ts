@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { v0 } from 'v0-sdk';
 
+interface V0ChatResponse {
+  id?: string;
+  chatId?: string;
+  demo?: string;
+  url?: string;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { message, chatId } = await request.json();
@@ -12,7 +19,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    let chat: any;
+    let chat: V0ChatResponse;
 
     if (chatId) {
       chat = await v0.chats.sendMessage({
