@@ -1,13 +1,39 @@
-import { streamText } from "ai";
-import { openai } from "@ai-sdk/openai";
+import { NextRequest, NextResponse } from 'next/server';
+import { v0 } from 'v0-sdk';
 
-export async function POST(req: Request) {
-  const { messages } = await req.json();
+export async function POST(request: NextRequest) {
+  try {
+    const { message, chatId } = await request.json();
 
-  const response = await streamText({
-    model: openai("gpt-4o-mini"),
-    messages,
-  });
+    if (!message) {
+      return NextResponse.json(
+        { error: 'Message is required' },
+        { status: 400 },
+      );
+    }
 
-  return response.toTextStreamResponse();
+    let chat;
+
+    if (chatId) {
+      chat = await v0.chats.sendMessage({
+        chatId: chatId,
+        message,
+      });
+    } else {
+      chat = await v0.chats.create({
+        message,
+      });
+    }
+
+    return NextResponse.json({
+      id: chat.id,
+      demo: chat.demo,
+    });
+  } catch (error) {
+    console.error('V0 API Error:', error);
+    return NextResponse.json(
+      { error: 'Failed to process request' },
+      { status: 500 },
+    );
+  }
 }

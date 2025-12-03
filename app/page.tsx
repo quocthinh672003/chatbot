@@ -1,65 +1,89 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState } from 'react';
+import {
+  PromptInput,
+  type PromptInputMessage,
+  PromptInputSubmit,
+  PromptInputTextarea,
+} from '@/components/ai-elements/prompt-input';
+import { Message, MessageContent } from '@/components/ai-elements/message';
+import {
+  Conversation,
+  ConversationContent,
+} from '@/components/ai-elements/conversation';
+import {
+  WebPreview,
+  WebPreviewNavigation,
+  WebPreviewUrl,
+  WebPreviewBody,
+} from '@/components/ai-elements/web-preview';
+import { Loader } from '@/components/ai-elements/loader';
+import { Suggestions, Suggestion } from '@/components/ai-elements/suggestion';
+
+interface Chat {
+  id: string;
+  demo: string;
+}
 
 export default function Home() {
-  const [messages, setMessages] = useState<{ role: string; content: string }[]>([]);
-  const [input, setInput] = useState('');
+  const [message, setMessage] = useState('');
+  const [currentChat, setCurrentChat] = useState<Chat | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [chatHistory, setChatHistory] = useState<
+    Array<{
+      type: 'user' | 'assistant';
+      content: string;
+    }>
+  >([]);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
+  const handleSendMessage = async (promptMessage: PromptInputMessage) => {
+    const hasText = Boolean(promptMessage.text);
+    const hasAttachments = Boolean(promptMessage.files?.length);
+    
+    if (!(hasText || hasAttachments) || isLoading) return;
 
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!input.trim() || isLoading) return;
-
-    const userMessage = { role: 'user', content: input };
-    setMessages((prev) => [...prev, userMessage]);
-    setInput('');
+    const userMessage = promptMessage.text?.trim() || 'Sent with attachments';
+    setMessage('');
     setIsLoading(true);
+
+    setChatHistory((prev) => [...prev, { type: 'user', content: userMessage }]);
 
     try {
       const response = await fetch('/api/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: [...messages, userMessage] }),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: userMessage,
+          chatId: currentChat?.id,
+        }),
       });
 
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-      let assistantMessage = '';
-
-      if (reader) {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          
-          const chunk = decoder.decode(value);
-          assistantMessage += chunk;
-          
-          setMessages((prev) => {
-            const newMessages = [...prev];
-            if (newMessages[newMessages.length - 1]?.role === 'assistant') {
-              newMessages[newMessages.length - 1].content = assistantMessage;
-            } else {
-              newMessages.push({ role: 'assistant', content: assistantMessage });
-            }
-            return newMessages;
-          });
-        }
+      if (!response.ok) {
+        throw new Error('Failed to create chat');
       }
+
+      const chat: Chat = await response.json();
+      setCurrentChat(chat);
+
+      setChatHistory((prev) => [
+        ...prev,
+        {
+          type: 'assistant',
+          content: 'Generated new app preview. Check the preview panel!',
+        },
+      ]);
     } catch (error) {
       console.error('Error:', error);
-      setMessages((prev) => [
+      setChatHistory((prev) => [
         ...prev,
-        { role: 'assistant', content: 'Sorry, an error occurred. Please try again.' },
+        {
+          type: 'assistant',
+          content:
+            'Sorry, there was an error creating your app. Please try again.',
+        },
       ]);
     } finally {
       setIsLoading(false);
@@ -67,96 +91,98 @@ export default function Home() {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
-      <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 p-4">
-        <div className="max-w-4xl mx-auto">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-            🤖 AI Chatbot
-          </h1>
-          <p className="text-sm text-gray-600 dark:text-gray-400">
-            Powered by GPT-4o Mini
-          </p>
+    <div className="h-screen flex">
+      {/* Chat Panel */}
+      <div className="w-1/2 flex flex-col border-r">
+        {/* Header */}
+        <div className="border-b p-3 h-14 flex items-center justify-between">
+          <h1 className="text-lg font-semibold">v0 Clone</h1>
         </div>
-      </header>
 
-      <div className="flex-1 overflow-y-auto p-4">
-        <div className="max-w-4xl mx-auto space-y-4">
-          {messages.length === 0 && (
-            <div className="text-center py-12">
-              <div className="text-6xl mb-4">💬</div>
-              <h2 className="text-xl font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                Start a conversation
-              </h2>
-              <p className="text-gray-500 dark:text-gray-400">
-                Ask me anything and I&apos;ll help you out!
-              </p>
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {chatHistory.length === 0 ? (
+            <div className="text-center font-semibold mt-8">
+              <p className="text-3xl mt-4">What can we build together?</p>
             </div>
+          ) : (
+            <>
+              <Conversation>
+                <ConversationContent>
+                  {chatHistory.map((msg, index) => (
+                    <Message from={msg.type} key={index}>
+                      <MessageContent>{msg.content}</MessageContent>
+                    </Message>
+                  ))}
+                </ConversationContent>
+              </Conversation>
+              {isLoading && (
+                <Message from="assistant">
+                  <MessageContent>
+                    <div className="flex items-center gap-2">
+                      <Loader />
+                      Creating your app...
+                    </div>
+                  </MessageContent>
+                </Message>
+              )}
+            </>
           )}
+        </div>
 
-          {messages.map((message, index) => (
-            <div
-              key={index}
-              className={`flex ${
-                message.role === 'user' ? 'justify-end' : 'justify-start'
-              }`}
+        {/* Input */}
+        <div className="border-t p-4">
+          {!currentChat && (
+            <Suggestions>
+              <Suggestion
+                onClick={() =>
+                  setMessage('Create a responsive navbar with Tailwind CSS')
+                }
+                suggestion="Create a responsive navbar with Tailwind CSS"
+              />
+              <Suggestion
+                onClick={() => setMessage('Build a todo app with React')}
+                suggestion="Build a todo app with React"
+              />
+              <Suggestion
+                onClick={() =>
+                  setMessage('Make a landing page for a coffee shop')
+                }
+                suggestion="Make a landing page for a coffee shop"
+              />
+            </Suggestions>
+          )}
+          <div className="flex gap-2">
+            <PromptInput
+              onSubmit={handleSendMessage}
+              className="mt-4 w-full max-w-2xl mx-auto relative"
             >
-              <div
-                className={`max-w-[80%] rounded-2xl px-4 py-3 ${
-                  message.role === 'user'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-md'
-                }`}
-              >
-                <div className="flex items-start gap-2">
-                  <span className="text-sm">
-                    {message.role === 'user' ? '👤' : '🤖'}
-                  </span>
-                  <p className="text-sm leading-relaxed whitespace-pre-wrap">
-                    {message.content}
-                  </p>
-                </div>
-              </div>
-            </div>
-          ))}
-          <div ref={messagesEndRef} />
-
-          {isLoading && messages[messages.length - 1]?.role !== 'assistant' && (
-            <div className="flex justify-start">
-              <div className="bg-white dark:bg-gray-800 rounded-2xl px-4 py-3 shadow-md">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm">🤖</span>
-                  <div className="flex gap-1">
-                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
+              <PromptInputTextarea
+                onChange={(e) => setMessage(e.target.value)}
+                value={message}
+                className="pr-12 min-h-[60px]"
+              />
+              <PromptInputSubmit
+                className="absolute bottom-1 right-1"
+                disabled={!message}
+                status={isLoading ? 'streaming' : 'ready'}
+              />
+            </PromptInput>
+          </div>
         </div>
       </div>
 
-      <div className="border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4">
-        <form onSubmit={handleSubmit} className="max-w-4xl mx-auto">
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder="Type your message..."
-              className="flex-1 rounded-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-6 py-3 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              disabled={isLoading}
+      {/* Preview Panel */}
+      <div className="w-1/2 flex flex-col">
+        <WebPreview>
+          <WebPreviewNavigation>
+            <WebPreviewUrl
+              readOnly
+              placeholder="Your app here..."
+              value={currentChat?.demo}
             />
-            <button
-              type="submit"
-              disabled={isLoading || !input.trim()}
-              className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-full px-6 py-3 font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              {isLoading ? '...' : 'Send'}
-            </button>
-          </div>
-        </form>
+          </WebPreviewNavigation>
+          <WebPreviewBody src={currentChat?.demo} />
+        </WebPreview>
       </div>
     </div>
   );
