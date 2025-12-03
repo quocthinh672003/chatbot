@@ -1,13 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { v0 } from 'v0-sdk';
 
-interface V0ChatResponse {
-  id?: string;
-  chatId?: string;
-  demo?: string;
-  url?: string;
-}
-
 export async function POST(request: NextRequest) {
   try {
     const { message, chatId } = await request.json();
@@ -19,7 +12,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    let chat: V0ChatResponse;
+    let chat;
 
     if (chatId) {
       chat = await v0.chats.sendMessage({
@@ -32,9 +25,11 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    const response = chat as { id?: string; chatId?: string; demo?: string; url?: string };
+
     return NextResponse.json({
-      id: chat.id || chat.chatId || chatId,
-      demo: chat.demo || chat.url || '',
+      id: response.id || response.chatId || chatId,
+      demo: response.demo || response.url || '',
     });
   } catch (error) {
     console.error('V0 API Error:', error);
