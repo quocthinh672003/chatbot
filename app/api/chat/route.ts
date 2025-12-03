@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    let chat;
+    let chat: any;
 
     if (chatId) {
       chat = await v0.chats.sendMessage({
@@ -26,8 +26,8 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({
-      id: chat.id,
-      demo: chat.demo,
+      id: chat.id || chat.chatId || chatId,
+      demo: chat.demo || chat.url || '',
     });
   } catch (error) {
     console.error('V0 API Error:', error);
